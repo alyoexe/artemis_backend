@@ -122,3 +122,42 @@ Example token request body:
 - Status defaults to UPLOADED on document creation.
 - External processing trigger is intentionally left as a TODO in the upload flow.
 - If `SUPABASE_STORAGE_ENABLED=True`, uploaded files are stored in Supabase Storage (public bucket mode if `SUPABASE_STORAGE_PUBLIC=True`).
+
+## 9. Deploy on Render
+
+### Option A: Render Blueprint (recommended)
+
+1. Push this repository to GitHub.
+2. In Render, click **New** -> **Blueprint**.
+3. Select your repository.
+4. Render will detect `render.yaml` and create the web service.
+5. In the service environment variables, set:
+  - `SUPABASE_DB_URL` (or Render PostgreSQL URL)
+  - `PIPELINE_STATUS_TOKEN`
+  - `CSRF_TRUSTED_ORIGINS` (for example `https://your-service.onrender.com`)
+  - `CORS_ALLOWED_ORIGINS` (frontend URLs, comma-separated)
+6. Deploy.
+
+### Option B: Manual Web Service Setup
+
+1. In Render, click **New** -> **Web Service** and connect this repo.
+2. Configure:
+  - **Environment**: `Python`
+  - **Build Command**: `pip install -r requirements.txt ; python manage.py migrate ; python manage.py collectstatic --noinput`
+  - **Start Command**: `gunicorn config.wsgi:application`
+3. Add env vars:
+  - `DJANGO_SECRET_KEY=<strong-random-secret>`
+  - `DJANGO_DEBUG=False`
+  - `DJANGO_ALLOWED_HOSTS=.onrender.com`
+  - `SUPABASE_DB_URL=<your-postgres-url>`
+  - `PIPELINE_STATUS_TOKEN=<strong-random-token>`
+  - `CSRF_TRUSTED_ORIGINS=https://your-service.onrender.com`
+  - `CORS_ALLOWED_ORIGINS=https://your-frontend-domain.com`
+4. Deploy and test:
+  - `GET /api/` or one of your API endpoints
+  - `POST /api/auth/token/`
+
+### Important production notes
+
+- Render filesystem is ephemeral. Keep `SUPABASE_STORAGE_ENABLED=True` for persistent uploaded files.
+- Do not use SQLite in production. Use PostgreSQL via `SUPABASE_DB_URL` or `DATABASE_URL`.

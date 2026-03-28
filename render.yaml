@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: artemis-backend
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt ; python manage.py migrate ; python manage.py collectstatic --noinput
+    startCommand: gunicorn config.wsgi:application
+    autoDeploy: true
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: .onrender.com
+      - key: DJANGO_SECURE_SSL_REDIRECT
+        value: "True"
+      - key: DJANGO_SESSION_COOKIE_SECURE
+        value: "True"
+      - key: DJANGO_CSRF_COOKIE_SECURE
+        value: "True"
+      - key: WEB_CONCURRENCY
+        value: "2"
+      - key: SUPABASE_DB_URL
+        sync: false
+      - key: PIPELINE_STATUS_TOKEN
+        sync: false

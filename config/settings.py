@@ -67,6 +67,9 @@ INSTALLED_APPS = [
 if find_spec("corsheaders"):
     INSTALLED_APPS.insert(0, "corsheaders")
 
+if find_spec("whitenoise"):
+    INSTALLED_APPS.insert(1, "whitenoise.runserver_nostatic")
+
 if find_spec("storages"):
     INSTALLED_APPS.append("storages")
 
@@ -79,6 +82,9 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+if find_spec("whitenoise"):
+    MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
 
 if find_spec("corsheaders"):
     MIDDLEWARE.insert(2, "corsheaders.middleware.CorsMiddleware")
@@ -103,7 +109,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-database_url = os.getenv("SUPABASE_DB_URL", "sqlite:///db.sqlite3")
+database_url = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL") or "sqlite:///db.sqlite3"
 
 # Supabase "pooler" hostnames are PgBouncer endpoints. In that setup, long-lived
 # Django connections can become stale, and server-side cursors can be problematic.
@@ -137,6 +143,7 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
@@ -187,7 +194,21 @@ if (
             "OPTIONS": s3_options,
         },
         "staticfiles": {
-            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+            if find_spec("whitenoise")
+            else "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+
+if "STORAGES" not in globals():
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+            if find_spec("whitenoise")
+            else "django.contrib.staticfiles.storage.StaticFilesStorage",
         },
     }
 
@@ -218,3 +239,9 @@ PIPELINE_STATUS_TOKEN = os.getenv("PIPELINE_STATUS_TOKEN", "")
 
 raw_cors_allowed_origins = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in raw_cors_allowed_origins.split(",") if origin.strip()]
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if origin.strip()]
+SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
+SESSION_COOKIE_SECURE = env_bool("DJANGO_SESSION_COOKIE_SECURE", not DEBUG)
+CSRF_COOKIE_SECURE = env_bool("DJANGO_CSRF_COOKIE_SECURE", not DEBUG)
