@@ -237,6 +237,12 @@ SIMPLE_JWT = {
 
 PIPELINE_STATUS_TOKEN = os.getenv("PIPELINE_STATUS_TOKEN", "")
 
+FASTAPI_INGEST_BASE_URL = os.getenv(
+    "FASTAPI_INGEST_BASE_URL",
+    "https://fast-api-cloud-ingestion-production.up.railway.app",
+).strip().rstrip("/")
+FASTAPI_INGEST_TIMEOUT_SECONDS = env_int("FASTAPI_INGEST_TIMEOUT_SECONDS", 30)
+
 raw_cors_allowed_origins = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in raw_cors_allowed_origins.split(",") if origin.strip()]
 

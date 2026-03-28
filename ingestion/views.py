@@ -1,4 +1,7 @@
+import logging
+import threading
 from pathlib import Path
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -10,6 +13,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+
+import requests
 
 from ingestion.models import CustomUser, EquipmentCategory, TechnicalDocument, Vendor
 from ingestion.permissions import (
@@ -144,11 +149,71 @@ class TechnicalDocumentViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         document = serializer.save(uploaded_by=request.user)
 
-        # TODO: Trigger external processing pipeline here
+        self._trigger_fastapi_ingest(document.id)
 
         response_serializer = self.get_serializer(document)
         headers = self.get_success_headers(response_serializer.data)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def _trigger_fastapi_ingest(self, document_id: int) -> None:
+        thread = threading.Thread(
+            target=self._run_fastapi_ingest,
+            args=(document_id,),
+            daemon=True,
+        )
+        thread.start()
+
+    @staticmethod
+    def _run_fastapi_ingest(document_id: int) -> None:
+        base_url = getattr(settings, "FASTAPI_INGEST_BASE_URL", "").strip().rstrip("/")
+        if not base_url:
+            return
+
+        try:
+            document = TechnicalDocument.objects.select_related().get(id=document_id)
+        except TechnicalDocument.DoesNotExist:
+            return
+
+        if not document.file:
+            return
+
+        visible_users = list(document.visible_to.all())
+        if not visible_users:
+            visible_users = list(
+                CustomUser.objects.filter(role=CustomUser.Roles.FIELD_TECHNICIAN)
+            )
+
+        timeout_seconds = getattr(settings, "FASTAPI_INGEST_TIMEOUT_SECONDS", 30)
+        logger = logging.getLogger(__name__)
+
+        for user in visible_users:
+            if not user.username:
+                continue
+
+            try:
+                with document.file.open("rb") as file_handle:
+                    file_name = Path(document.file.name).name
+                    params = urlencode({"collection_name": user.username})
+                    url = f"{base_url}/ingest?{params}"
+                    response = requests.post(
+                        url,
+                        files={"file": (file_name, file_handle)},
+                        timeout=timeout_seconds,
+                    )
+
+                if not response.ok:
+                    logger.warning(
+                        "FastAPI ingest failed (status=%s, user=%s, document_id=%s)",
+                        response.status_code,
+                        user.username,
+                        document.id,
+                    )
+            except Exception:
+                logger.exception(
+                    "FastAPI ingest error (user=%s, document_id=%s)",
+                    user.username,
+                    document.id,
+                )
 
     def perform_destroy(self, instance):
         # Delete the underlying file object first so row and storage stay in sync.
