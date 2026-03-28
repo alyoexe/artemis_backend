@@ -239,7 +239,7 @@ PIPELINE_STATUS_TOKEN = os.getenv("PIPELINE_STATUS_TOKEN", "")
 
 FASTAPI_INGEST_BASE_URL = os.getenv(
     "FASTAPI_INGEST_BASE_URL",
-    "https://fast-api-cloud-ingestion-production.up.railway.app",
+    "https://project-hail-mary-production-337f.up.railway.app",
 ).strip().rstrip("/")
 FASTAPI_INGEST_TIMEOUT_SECONDS = env_int("FASTAPI_INGEST_TIMEOUT_SECONDS", 30)
 
